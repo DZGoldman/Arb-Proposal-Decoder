@@ -329,10 +329,35 @@ function App() {
   const [inputData, setInputData] = useState('')
   const [actions, setActions] = useState<Action[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // Load data from URL parameter on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const dataParam = params.get('data')
+    if (dataParam) {
+      setInputData(dataParam)
+    }
+  }, [])
 
   const loadRandomTestData = () => {
     const randomIndex = Math.floor(Math.random() * TEST_PROPOSAL_DATA.length)
     setInputData(TEST_PROPOSAL_DATA[randomIndex])
+  }
+
+  const shareUrl = async () => {
+    if (!inputData) return
+
+    const url = new URL(window.location.href)
+    url.searchParams.set('data', inputData)
+
+    try {
+      await navigator.clipboard.writeText(url.toString())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
   }
 
   useEffect(() => {
@@ -382,12 +407,25 @@ function App() {
             <label htmlFor="data-input" className="block text-sm font-medium text-green-400 uppercase tracking-wide">
               {'>'} INPUT DATA BLOB
             </label>
-            <button
-              onClick={loadRandomTestData}
-              className="px-3 py-1 text-xs bg-fuchsia-950 border border-fuchsia-500 text-fuchsia-400 rounded hover:bg-fuchsia-900 hover:shadow-[0_0_10px_rgba(217,70,239,0.3)] transition-all uppercase tracking-wide font-bold"
-            >
-              Test Random Proposal
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={shareUrl}
+                disabled={!inputData}
+                className={`px-3 py-1 text-xs border rounded uppercase tracking-wide font-bold transition-all ${
+                  copied
+                    ? 'bg-green-950 border-green-500 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.3)]'
+                    : 'bg-cyan-950 border-cyan-500 text-cyan-400 hover:bg-cyan-900 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed'
+                }`}
+              >
+                {copied ? '✓ Copied!' : 'Share URL'}
+              </button>
+              <button
+                onClick={loadRandomTestData}
+                className="px-3 py-1 text-xs bg-fuchsia-950 border border-fuchsia-500 text-fuchsia-400 rounded hover:bg-fuchsia-900 hover:shadow-[0_0_10px_rgba(217,70,239,0.3)] transition-all uppercase tracking-wide font-bold"
+              >
+                Test Random Proposal
+              </button>
+            </div>
           </div>
           <textarea
             id="data-input"
