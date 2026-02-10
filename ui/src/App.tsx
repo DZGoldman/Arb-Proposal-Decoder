@@ -223,7 +223,6 @@ const getExplorerUrl = (chainID: number, address: string): string => {
   const explorerConfigs: Record<number, { base: string; suffix: string }> = {
     1: { base: 'https://etherscan.io/address/', suffix: '#code' },
     42161: { base: 'https://arbiscan.io/address/', suffix: '#code' },
-    42161: { base: 'https://arbiscan.io/address/', suffix: '#code' },
     42170: { base: 'https://arbitrum-nova.blockscout.com/address/', suffix: '?tab=contract' },
   }
 
@@ -234,7 +233,6 @@ const getExplorerUrl = (chainID: number, address: string): string => {
 const getChainName = (chainID: number): string => {
   const chains: Record<number, string> = {
     1: 'Ethereum',
-    42161: 'Arbitrum One',
     42161: 'Arbitrum One',
     42170: 'Arbitrum Nova',
   }

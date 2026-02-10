@@ -12,10 +12,7 @@ interface L1TimelockAction {
   payload: string;
 }
 
-enum ActionType {
-  CALL = 'CALL',
-  DELEGATECALL = 'DELEGATECALL',
-}
+type ActionType = 'CALL' | 'DELEGATECALL';
 
 interface Action {
   type: ActionType;
@@ -37,7 +34,7 @@ export function decodeL1TimelockSchedule(calldata: string) {
 
   switch (fragment.name) {
     case 'scheduleBatch': {
-      return decoded[0].map((arg: any, i: number) => {
+      return decoded[0].map((_: any, i: number) => {
         return handleScheduleCall({
           target: decoded[0][i],
           payload: decoded[2][i],
@@ -83,7 +80,7 @@ const handleScheduleCall = (l1timelockAction: L1TimelockAction) => {
   }
 };
 
-const handleUpradeExecutorCall = (target: string, payload: string, chainID: number): Action => {
+const handleUpradeExecutorCall = (_target: string, payload: string, chainID: number): Action => {
   const iface = new Interface(upgradeExecutorABI);
 
   const selector = payload.slice(0, 10);
@@ -97,7 +94,7 @@ const handleUpradeExecutorCall = (target: string, payload: string, chainID: numb
       // console.log(actionContractAddress, actionPayload);
 
       return {
-        type: ActionType.DELEGATECALL,
+        type: 'DELEGATECALL',
         address: actionContractAddress,
         callData: actionPayload,
         chainID,
@@ -109,7 +106,7 @@ const handleUpradeExecutorCall = (target: string, payload: string, chainID: numb
       const [address, callData] = decoded;
 
       return {
-        type: ActionType.CALL,
+        type: 'CALL',
         address,
         callData,
         chainID,
