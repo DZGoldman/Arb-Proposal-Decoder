@@ -94,7 +94,7 @@ const handleUpradeExecutorCall = (target: string, payload: string, chainID: numb
     case 'execute': {
       const decoded = iface.decodeFunctionData(fragment, payload);
       const [actionContractAddress, actionPayload] = decoded;
-      // console.log(actionContractAddress, actionPayload);
+      console.log("paylous", actionPayload);
 
       return {
         type: ActionType.DELEGATECALL,

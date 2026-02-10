@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { decodeL1TimelockSchedule } from './decoder'
+import { Interface } from 'ethers'
 
 interface Action {
   type: string;
@@ -7,6 +8,266 @@ interface Action {
   chainID: number;
   callData: string;
   decodedCallData?: string;
+}
+
+interface FourByteResponse {
+  count: number;
+  results: Array<{
+    id: number;
+    text_signature: string;
+    hex_signature: string;
+  }>;
+}
+
+const ETHERSCAN_API_KEY = 'EIW92DMXJHRPQMTZ9KHMCGN7SSCJAYIQ84' // Free tier public key
+
+function getExplorerApiUrl(chainID: number): string | null {
+  const apis: Record<number, string> = {
+    1: 'https://api.etherscan.io/v2/api',
+    42161: 'https://api.arbiscan.io/api', // Arbiscan might not have V2 yet
+    42162: 'https://api.arbiscan.io/api',
+    // Nova doesn't have etherscan-style API
+  }
+  return apis[chainID] || null
+}
+
+async function fetchContractABI(address: string, chainID: number): Promise<string | null> {
+  const apiUrl = getExplorerApiUrl(chainID)
+  console.log('[ABI] Attempting to fetch ABI for:', { address, chainID, apiUrl })
+
+  if (!apiUrl) {
+    console.log('[ABI] No API URL for chain', chainID)
+    return null
+  }
+
+  try {
+    // V2 API format: includes chainid parameter
+    const isV2 = apiUrl.includes('/v2/')
+    const url = isV2
+      ? `${apiUrl}?chainid=${chainID}&module=contract&action=getabi&address=${address}&apikey=${ETHERSCAN_API_KEY}`
+      : `${apiUrl}?module=contract&action=getabi&address=${address}&apikey=${ETHERSCAN_API_KEY}`
+
+    console.log('[ABI] Fetching from:', url)
+
+    const response = await fetch(url)
+    const data = await response.json()
+
+    console.log('[ABI] Response:', data)
+
+    if (data.status === '1' && data.result) {
+      console.log('[ABI] Successfully fetched ABI')
+      return data.result
+    } else {
+      console.log('[ABI] Failed to fetch ABI:', data.message || data.result)
+    }
+  } catch (error) {
+    console.error('[ABI] Fetch error:', error)
+  }
+
+  return null
+}
+
+async function decodeWithABI(callData: string, address: string, chainID: number): Promise<string> {
+  const abiJson = await fetchContractABI(address, chainID)
+  if (!abiJson) return ''
+
+  try {
+    const abi = JSON.parse(abiJson)
+    const iface = new Interface(abi)
+    const selector = callData.slice(0, 10)
+
+    // Find the function in the ABI
+    const fragment = iface.getFunction(selector)
+    if (!fragment) return ''
+
+    // Decode the function data
+    const decoded = iface.decodeFunctionData(fragment, callData)
+
+    // Format the output
+    const params = fragment.inputs.map((input, i) => {
+      return `${input.name || `arg${i}`}: ${decoded[i]}`
+    }).join(', ')
+
+    return `${fragment.name}(${params})`
+  } catch (error) {
+    console.error('ABI decoding failed:', error)
+    return ''
+  }
+}
+
+async function decode4Byte(callData: string): Promise<string> {
+  if (!callData || callData.length < 10) {
+    return ''
+  }
+
+  const selector = callData.slice(0, 10)
+  console.log('[4byte] Attempting to decode selector:', selector)
+
+  try {
+    const response = await fetch(
+      `https://www.4byte.directory/api/v1/signatures/?hex_signature=${selector}`
+    )
+    const data: FourByteResponse = await response.json()
+
+    console.log('[4byte] Response:', data)
+
+    if (data.results && data.results.length > 0) {
+      const signature = data.results[0].text_signature
+      console.log('[4byte] Found signature:', signature)
+
+      // Try to decode the parameters
+      try {
+        const iface = new Interface([`function ${signature}`])
+        const decoded = iface.decodeFunctionData(signature.split('(')[0], callData)
+
+        // Format the decoded parameters
+        const params = signature.match(/\(([^)]+)\)/)?.[1].split(',') || []
+        const formattedParams = params.map((param, i) => {
+          const value = decoded[i]
+          return `${param.trim()}: ${value}`
+        }).join(', ')
+
+        const result = `${signature.split('(')[0]}(${formattedParams})`
+        console.log('[4byte] Decoded successfully:', result)
+        return result
+      } catch (err) {
+        console.log('[4byte] Decoding failed, returning signature only:', err)
+        // If decoding fails, just return the signature
+        return signature
+      }
+    } else {
+      console.log('[4byte] No results found')
+    }
+  } catch (error) {
+    console.error('[4byte] Lookup failed:', error)
+  }
+
+  return ''
+}
+
+async function decodeCallData(callData: string, address: string, chainID: number): Promise<string> {
+  console.log('[Decode] Starting decode for:', { callData: callData.slice(0, 20) + '...', address, chainID })
+
+  // First try 4byte (works for all chains)
+  console.log('[Decode] Trying 4byte...')
+  const fourByteResult = await decode4Byte(callData)
+  if (fourByteResult) {
+    console.log('[Decode] 4byte succeeded, using result')
+    return fourByteResult
+  }
+
+  // Skip Etherscan API for Nova
+  if (chainID === 42170) {
+    console.log('[Decode] Skipping Etherscan for Nova (chain 42170)')
+    return ''
+  }
+
+  // Fallback to ABI lookup (V2 API) for L1 and Arb One only
+  console.log('[Decode] 4byte failed, trying ABI lookup...')
+  const abiResult = await decodeWithABI(callData, address, chainID)
+  if (abiResult) {
+    console.log('[Decode] ABI decode succeeded')
+  } else {
+    console.log('[Decode] ABI decode failed, no result')
+  }
+  return abiResult
+}
+
+const getExplorerUrl = (chainID: number, address: string): string => {
+  const explorerConfigs: Record<number, { base: string; suffix: string }> = {
+    1: { base: 'https://etherscan.io/address/', suffix: '#code' },
+    42161: { base: 'https://arbiscan.io/address/', suffix: '#code' },
+    42162: { base: 'https://arbiscan.io/address/', suffix: '#code' },
+    42170: { base: 'https://arbitrum-nova.blockscout.com/address/', suffix: '?tab=contract' },
+  }
+
+  const config = explorerConfigs[chainID] || { base: 'https://etherscan.io/address/', suffix: '#code' }
+  return `${config.base}${address}${config.suffix}`
+}
+
+const getChainName = (chainID: number): string => {
+  const chains: Record<number, string> = {
+    1: 'Ethereum',
+    42161: 'Arbitrum One',
+    42162: 'Arbitrum One',
+    42170: 'Arbitrum Nova',
+  }
+
+  return chains[chainID] || `Chain ${chainID}`
+}
+
+function ActionCard({ action, index }: { action: Action; index: number }) {
+  const [autoDecoded, setAutoDecoded] = useState<string>('')
+  const [isDecoding, setIsDecoding] = useState(false)
+
+  useEffect(() => {
+    if (!action.decodedCallData && action.callData) {
+      setIsDecoding(true)
+      decodeCallData(action.callData, action.address, action.chainID).then((result) => {
+        setAutoDecoded(result)
+        setIsDecoding(false)
+      })
+    }
+  }, [action.callData, action.decodedCallData, action.address, action.chainID])
+
+  const displayDecoded = action.decodedCallData || autoDecoded
+
+  return (
+    <div className="border-2 border-green-500 bg-gray-950 rounded-lg p-4 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-bold text-green-400">ACTION #{index + 1}</h3>
+        <span className={`px-3 py-1 border-2 rounded text-xs font-bold uppercase tracking-wider ${
+          action.type === 'DELEGATECALL'
+            ? 'border-fuchsia-500 text-fuchsia-400 bg-fuchsia-950 shadow-[0_0_10px_rgba(217,70,239,0.3)]'
+            : 'border-lime-500 text-lime-400 bg-lime-950 shadow-[0_0_10px_rgba(132,204,22,0.3)]'
+        }`}>
+          {action.type === 'DELEGATECALL' ? 'Action Contract Call' : action.type}
+        </span>
+      </div>
+      <div className="space-y-2 text-sm">
+        <div className="flex items-baseline">
+          <span className="font-bold text-cyan-400 uppercase">Chain:</span>
+          <span className="ml-2 text-green-400">{getChainName(action.chainID)} (ID: {action.chainID})</span>
+        </div>
+        <div>
+          <span className="font-bold text-cyan-400 uppercase">
+            {action.type === 'DELEGATECALL' ? 'Action Contract Address:' : 'Address:'}
+          </span>
+          <a
+            href={getExplorerUrl(action.chainID, action.address)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-2 text-yellow-400 hover:text-yellow-300 bg-gray-900 px-2 py-1 rounded border border-yellow-600 text-xs break-all inline-block hover:border-yellow-400 hover:shadow-[0_0_10px_rgba(250,204,21,0.4)] transition-all"
+          >
+            {action.address} ↗
+          </a>
+        </div>
+        {displayDecoded ? (
+          <div>
+            <span className="font-bold text-cyan-400 uppercase">Decoded Call Data:</span>
+            <code className="ml-2 text-cyan-300 bg-cyan-950 px-2 py-1 rounded border border-cyan-600 text-xs break-all block mt-1">
+              {displayDecoded}
+            </code>
+          </div>
+        ) : isDecoding ? (
+          <div>
+            <span className="font-bold text-cyan-400 uppercase">Call Data:</span>
+            <code className="ml-2 block mt-1 text-green-300 bg-gray-900 px-2 py-1 rounded border border-green-600 text-xs break-all">
+              {action.callData}
+            </code>
+            <div className="mt-1 text-xs text-cyan-400 animate-pulse">Decoding...</div>
+          </div>
+        ) : (
+          <div>
+            <span className="font-bold text-cyan-400 uppercase">Call Data:</span>
+            <code className="ml-2 block mt-1 text-green-300 bg-gray-900 px-2 py-1 rounded border border-green-600 text-xs break-all">
+              {action.callData}
+            </code>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function App() {
@@ -35,86 +296,50 @@ function App() {
   }, [inputData])
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-black py-8 px-4 font-mono">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8 text-center">
-          Arbitrum DAO Proposal Decoder
-        </h1>
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-bold text-cyan-400 mb-2 tracking-wider animate-pulse">
+            ARBITRUM DAO PROPOSAL DECODER
+          </h1>
+          <div className="text-green-500 text-xs">{'>'} CHAIN ANALYSIS TERMINAL v1.0</div>
+        </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <label htmlFor="data-input" className="block text-sm font-medium text-gray-700 mb-2">
-            Paste proposal data blob:
+        <div className="bg-black border-2 border-cyan-500 rounded-lg p-6 mb-6 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+          <label htmlFor="data-input" className="block text-sm font-medium text-green-400 mb-2 uppercase tracking-wide">
+            {'>'} INPUT DATA BLOB
           </label>
           <textarea
             id="data-input"
             value={inputData}
             onChange={(e) => setInputData(e.target.value)}
-            className="w-full h-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+            className="w-full h-32 px-3 py-2 text-sm bg-gray-900 border border-green-500 rounded text-green-400 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(6,182,212,0.5)] font-mono placeholder-green-700"
             placeholder="0x8f2a0bb0..."
           />
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="bg-red-950 border-2 border-red-500 rounded-lg p-4 mb-6 shadow-[0_0_15px_rgba(239,68,68,0.3)]">
             <div className="flex items-start">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
+                <div className="text-red-400 text-xl">⚠</div>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error decoding data</h3>
-                <p className="mt-1 text-sm text-red-700">{error}</p>
+                <h3 className="text-sm font-bold text-red-400 uppercase tracking-wide">ERROR</h3>
+                <p className="mt-1 text-sm text-red-300 font-mono">{error}</p>
               </div>
             </div>
           </div>
         )}
 
         {actions && actions.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-              Decoded Actions ({actions.length})
+          <div className="bg-black border-2 border-cyan-500 rounded-lg p-6 shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4 uppercase tracking-wide">
+              {'>'} DECODED ACTIONS [{actions.length}]
             </h2>
             <div className="space-y-4">
               {actions.map((action, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold text-gray-800">Action {index + 1}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      action.type === 'DELEGATECALL'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {action.type}
-                    </span>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="font-medium text-gray-700">Chain ID:</span>
-                      <span className="ml-2 text-gray-600">{action.chainID}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Address:</span>
-                      <code className="ml-2 text-gray-600 bg-gray-50 px-2 py-1 rounded text-xs break-all">
-                        {action.address}
-                      </code>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Call Data:</span>
-                      <code className="ml-2 block mt-1 text-gray-600 bg-gray-50 px-2 py-1 rounded text-xs break-all">
-                        {action.callData}
-                      </code>
-                    </div>
-                    {action.decodedCallData && (
-                      <div>
-                        <span className="font-medium text-gray-700">Decoded Call Data:</span>
-                        <code className="ml-2 text-gray-600 bg-blue-50 px-2 py-1 rounded text-xs">
-                          {action.decodedCallData}
-                        </code>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <ActionCard key={index} action={action} index={index} />
               ))}
             </div>
           </div>
