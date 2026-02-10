@@ -30,7 +30,7 @@ export function decodeL1TimelockSchedule(calldata: string) {
 
   const selector = calldata.slice(0, 10);
   const fragment = iface.getFunction(selector);
-  if (!fragment) throw new Error('no function selector');
+  if (!fragment) throw new Error('Could not find L1Timelock method');
 
   const decoded = iface.decodeFunctionData(fragment, calldata);
   // console.log('Function:', fragment.name);
@@ -53,7 +53,7 @@ export function decodeL1TimelockSchedule(calldata: string) {
       ];
     }
     default:
-      throw new Error('unrecognid function name:');
+      throw new Error('Unrecognized L1Timelock method name');
   }
 }
 
@@ -71,7 +71,7 @@ const handleScheduleCall = (l1timelockAction: L1TimelockAction) => {
 
       const chain = config.chains.find(entry => entry.inboxAddress === inbox);
       if (!chain) {
-        throw new Error('Unrecognized inbox');
+        throw new Error(`Unrecognized inbox ${inbox}`);
       }
       return handleUpradeExecutorCall(targetAddr, payload, chain.chainID);
     }
@@ -79,7 +79,7 @@ const handleScheduleCall = (l1timelockAction: L1TimelockAction) => {
     default:
       // TODO: this case   '0x01d5062a000000000000000000000000c4448b71118c9071bcb9734a0eac55d18a153949000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000001d64bfd58bbc5089313cbb4cac6bc0dc5cf3e849834e8a91537a8ba2ba553146000000000000000000000000000000000000000000000000000000000003f48000000000000000000000000000000000000000000000000000000000000001246e6e8a6a00000000000000000000000036d0170d92f66e8949eb276c3ac4fea64f83704d0000000000000000000000000000000000000000000000663a9d579527ee69800000000000000000000000000000000000000000000000000004f94ae6af800000000000000000000000000036d0170d92f66e8949eb276c3ac4fea64f83704d00000000000000000000000036d0170d92f66e8949eb276c3ac4fea64f83704d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000', // <- wierd one
       // is a direct call to the Arb Nova inbox (fee routing thing). handle it
-      throw new Error(`Unrecognid target ${l1timelockAction.target}`);
+      throw new Error(`Unrecognized L1timelock target ${l1timelockAction.target}`);
   }
 };
 
@@ -88,7 +88,7 @@ const handleUpradeExecutorCall = (target: string, payload: string, chainID: numb
 
   const selector = payload.slice(0, 10);
   const fragment = iface.getFunction(selector);
-  if (!fragment) throw new Error('no function selector');
+  if (!fragment) throw new Error('Could not get UpgradeExecutor method');
 
   switch (fragment.name) {
     case 'execute': {
@@ -118,6 +118,6 @@ const handleUpradeExecutorCall = (target: string, payload: string, chainID: numb
     }
 
     default:
-      throw new Error('unrecognieed error');
+      throw new Error(`Unrecognized UpgradeExecutor Method ${fragment.name}`);
   }
 };
