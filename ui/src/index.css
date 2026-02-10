@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@keyframes spin3d {
+  0% {
+    transform: rotateY(0deg) rotateZ(0deg);
+  }
+  50% {
+    transform: rotateY(180deg) rotateZ(180deg);
+  }
+  100% {
+    transform: rotateY(360deg) rotateZ(360deg);
+  }
+}
+
+.spin-3d {
+  animation: spin3d 4s ease-in-out infinite;
+}

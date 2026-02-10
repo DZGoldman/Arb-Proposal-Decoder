@@ -345,10 +345,22 @@ function App() {
     <div className="min-h-screen bg-black py-8 px-4 font-mono">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-cyan-400 mb-2 tracking-wider animate-pulse">
-            ARBITRUM DAO PROPOSAL DECODER
-          </h1>
-          <div className="text-green-500 text-xs">{'>'} CHAIN ANALYSIS TERMINAL v1.0</div>
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <img
+              src="https://cryptologos.cc/logos/arbitrum-arb-logo.png"
+              alt="Arbitrum Logo"
+              className="w-16 h-16 spin-3d"
+            />
+            <h1 className="text-4xl font-bold text-cyan-400 tracking-wider animate-pulse">
+              ARBITRUM DAO PROPOSAL DECODER
+            </h1>
+            <img
+              src="https://cryptologos.cc/logos/arbitrum-arb-logo.png"
+              alt="Arbitrum Logo"
+              className="w-16 h-16 spin-3d"
+              style={{ animationDelay: '2s' }}
+            />
+          </div>
         </div>
 
         <div className="bg-black border-2 border-cyan-500 rounded-lg p-6 mb-6 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
@@ -360,7 +372,7 @@ function App() {
             value={inputData}
             onChange={(e) => setInputData(e.target.value)}
             className="w-full h-32 px-3 py-2 text-sm bg-gray-900 border border-green-500 rounded text-green-400 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(6,182,212,0.5)] font-mono placeholder-green-700"
-            placeholder="0x8f2a0bb0..."
+            placeholder="Paste Data Here..."
           />
         </div>
 
