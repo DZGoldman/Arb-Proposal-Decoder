@@ -286,7 +286,7 @@ function ActionCard({ action, index }: { action: Action; index: number }) {
         </div>
         <div>
           <span className="font-bold text-cyan-400 uppercase">
-            {action.type === 'DELEGATECALL' ? 'Action Contract Address:' : 'Address:'}
+            {action.type === 'DELEGATECALL' ? 'Action Contract:' : 'Target:'}
           </span>
           <a
             href={getExplorerUrl(action.chainID, action.address)}
