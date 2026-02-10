@@ -17,7 +17,7 @@ export const config: Config = {
   // l1explorerurl
   chains: [
     {
-      chainID: 42162,
+      chainID: 42161,
       inboxAddress: '0x4Dbd4fc535Ac27206064B68FfCf827b0A60BAB3f',
       upgradeExecutorAddress: '0xCF57572261c7c2BCF21ffD220ea7d1a27D40A827',
     },

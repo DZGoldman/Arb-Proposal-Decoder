@@ -21,14 +21,61 @@ interface FourByteResponse {
 
 const ETHERSCAN_API_KEY = 'EIW92DMXJHRPQMTZ9KHMCGN7SSCJAYIQ84' // Free tier public key
 
-function getExplorerApiUrl(chainID: number): string | null {
-  const apis: Record<number, string> = {
-    1: 'https://api.etherscan.io/v2/api',
-    42161: 'https://api.arbiscan.io/api', // Arbiscan might not have V2 yet
-    42162: 'https://api.arbiscan.io/api',
-    // Nova doesn't have etherscan-style API
+// Rate limiter for 4byte API (max 3 calls/sec)
+class RateLimiter {
+  private queue: Array<{ fn: () => Promise<any>; resolve: (value: any) => void; reject: (error: any) => void }> = []
+  private processing = false
+  private lastCallTime = 0
+  private readonly minInterval = 350 // ~3 calls per second with buffer
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject })
+      this.processQueue()
+    })
   }
-  return apis[chainID] || null
+
+  private async processQueue() {
+    if (this.processing || this.queue.length === 0) {
+      return
+    }
+
+    this.processing = true
+
+    while (this.queue.length > 0) {
+      const now = Date.now()
+      const timeSinceLastCall = now - this.lastCallTime
+
+      if (timeSinceLastCall < this.minInterval) {
+        await new Promise(resolve => setTimeout(resolve, this.minInterval - timeSinceLastCall))
+      }
+
+      const item = this.queue.shift()
+      if (item) {
+        this.lastCallTime = Date.now()
+        try {
+          const result = await item.fn()
+          item.resolve(result)
+        } catch (error) {
+          item.reject(error)
+        }
+      }
+    }
+
+    this.processing = false
+  }
+}
+
+const fourByteRateLimiter = new RateLimiter()
+
+function getExplorerApiUrl(chainID: number): string | null {
+  // Etherscan V2 is unified across all chains
+  const supportedChains = [1, 42161, 42161] // Ethereum, Arbitrum One
+  if (supportedChains.includes(chainID)) {
+    return 'https://api.etherscan.io/v2/api'
+  }
+  // Nova (42170) not supported
+  return null
 }
 
 async function fetchContractABI(address: string, chainID: number): Promise<string | null> {
@@ -41,18 +88,14 @@ async function fetchContractABI(address: string, chainID: number): Promise<strin
   }
 
   try {
-    // V2 API format: includes chainid parameter
-    const isV2 = apiUrl.includes('/v2/')
-    const url = isV2
-      ? `${apiUrl}?chainid=${chainID}&module=contract&action=getabi&address=${address}&apikey=${ETHERSCAN_API_KEY}`
-      : `${apiUrl}?module=contract&action=getabi&address=${address}&apikey=${ETHERSCAN_API_KEY}`
-
+    // V2 API format: unified endpoint with chainid parameter
+    const url = `${apiUrl}?chainid=${chainID}&module=contract&action=getabi&address=${address}&apikey=${ETHERSCAN_API_KEY}`
     console.log('[ABI] Fetching from:', url)
 
     const response = await fetch(url)
     const data = await response.json()
 
-    console.log('[ABI] Response:', data)
+    console.log('[ABI] Response for chainID', chainID, ':', data)
 
     if (data.status === '1' && data.result) {
       console.log('[ABI] Successfully fetched ABI')
@@ -104,10 +147,13 @@ async function decode4Byte(callData: string): Promise<string> {
   console.log('[4byte] Attempting to decode selector:', selector)
 
   try {
-    const response = await fetch(
-      `https://www.4byte.directory/api/v1/signatures/?hex_signature=${selector}`
-    )
-    const data: FourByteResponse = await response.json()
+    // Use rate limiter to avoid hitting 3 calls/sec limit
+    const data: FourByteResponse = await fourByteRateLimiter.execute(async () => {
+      const response = await fetch(
+        `https://www.4byte.directory/api/v1/signatures/?hex_signature=${selector}`
+      )
+      return response.json()
+    })
 
     console.log('[4byte] Response:', data)
 
@@ -177,7 +223,7 @@ const getExplorerUrl = (chainID: number, address: string): string => {
   const explorerConfigs: Record<number, { base: string; suffix: string }> = {
     1: { base: 'https://etherscan.io/address/', suffix: '#code' },
     42161: { base: 'https://arbiscan.io/address/', suffix: '#code' },
-    42162: { base: 'https://arbiscan.io/address/', suffix: '#code' },
+    42161: { base: 'https://arbiscan.io/address/', suffix: '#code' },
     42170: { base: 'https://arbitrum-nova.blockscout.com/address/', suffix: '?tab=contract' },
   }
 
@@ -189,7 +235,7 @@ const getChainName = (chainID: number): string => {
   const chains: Record<number, string> = {
     1: 'Ethereum',
     42161: 'Arbitrum One',
-    42162: 'Arbitrum One',
+    42161: 'Arbitrum One',
     42170: 'Arbitrum Nova',
   }
 
