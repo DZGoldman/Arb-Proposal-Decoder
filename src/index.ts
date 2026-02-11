@@ -12,10 +12,11 @@ interface L1TimelockAction {
   payload: string;
 }
 
-enum ActionType {
-  CALL = 'CALL',
-  DELEGATECALL = 'DELEGATECALL',
-}
+const ActionType = {
+  CALL: 'CALL',
+  DELEGATECALL: 'DELEGATECALL',
+} as const
+type ActionType = typeof ActionType[keyof typeof ActionType]
 
 export interface Action {
   type: ActionType;
