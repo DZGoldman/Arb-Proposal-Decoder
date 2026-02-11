@@ -456,8 +456,22 @@ function App() {
         return
       }
 
+      const trimmed = inputData.trim()
+
+      // Check if input is a proposal ID (all digits, ~77 chars)
+      let dataToDecode = trimmed
+      if (/^\d{70,80}$/.test(trimmed)) {
+        const match = proposals.find((p) => p.proposalId === trimmed)
+        if (match) {
+          dataToDecode = match.calldatas[0]
+        } else {
+          setError(`Proposal ID not found: ${trimmed}`)
+          return
+        }
+      }
+
       try {
-        const result = decode(inputData.trim())
+        const result = decode(dataToDecode)
         setActions(result)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error occurred')
