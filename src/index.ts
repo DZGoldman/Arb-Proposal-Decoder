@@ -17,7 +17,7 @@ enum ActionType {
   DELEGATECALL = 'DELEGATECALL',
 }
 
-interface Action {
+export interface Action {
   type: ActionType;
   address: string; // for DELEGATECALLs this is the action contract; for CALLs this is the target
   chainID: number;
@@ -77,8 +77,15 @@ const handleScheduleCall = (l1timelockAction: L1TimelockAction) => {
     }
 
     default:
-      // TODO: this case   '0x01d5062a000000000000000000000000c4448b71118c9071bcb9734a0eac55d18a153949000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000001d64bfd58bbc5089313cbb4cac6bc0dc5cf3e849834e8a91537a8ba2ba553146000000000000000000000000000000000000000000000000000000000003f48000000000000000000000000000000000000000000000000000000000000001246e6e8a6a00000000000000000000000036d0170d92f66e8949eb276c3ac4fea64f83704d0000000000000000000000000000000000000000000000663a9d579527ee69800000000000000000000000000000000000000000000000000004f94ae6af800000000000000000000000000036d0170d92f66e8949eb276c3ac4fea64f83704d00000000000000000000000036d0170d92f66e8949eb276c3ac4fea64f83704d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000', // <- wierd one
-      // is a direct call to the Arb Nova inbox (fee routing thing). handle it
+      const isInboxAddress = config.chains.some(
+        chain => chain.inboxAddress === l1timelockAction.target
+      );
+      console.log("is inbox?",isInboxAddress );
+      
+      if (isInboxAddress) {
+        throw new Error(`L1Timelock calls directly to inbox not currently supported`);
+      }
+
       throw new Error(`Unrecognized L1timelock target ${l1timelockAction.target}`);
   }
 };
@@ -94,7 +101,6 @@ const handleUpradeExecutorCall = (target: string, payload: string, chainID: numb
     case 'execute': {
       const decoded = iface.decodeFunctionData(fragment, payload);
       const [actionContractAddress, actionPayload] = decoded;
-      console.log("paylous", actionPayload);
 
       return {
         type: ActionType.DELEGATECALL,
