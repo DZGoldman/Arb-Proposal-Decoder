@@ -547,7 +547,7 @@ function App() {
               className="w-16 h-16 spin-3d"
             />
             <h1 className="text-4xl font-bold text-cyan-400 tracking-wider animate-pulse">
-              ARBITRUM DAO PROPOSAL DECODER
+              CONSTITUTIONAL PROPOSAL DECODER
             </h1>
             <img
               src="https://cryptologos.cc/logos/arbitrum-arb-logo.png"
@@ -561,7 +561,7 @@ function App() {
         <div className="bg-black border-2 border-cyan-500 rounded-lg p-6 mb-6 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
           <div className="flex items-center justify-between mb-2">
             <label htmlFor="data-input" className="block text-sm font-medium text-green-400 uppercase tracking-wide">
-              {'>'} INPUT DATA BLOB
+              {'>'} INPUT ARBITRUM PROP DATA
             </label>
             <div className="flex gap-2">
               <button
