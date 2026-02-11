@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { decode, type Action } from '../../src/index'
-import { Interface } from 'ethers'
-import proposals from '../../data/proposals.json'
+import { Interface, Contract, JsonRpcProvider } from 'ethers'
+import proposalsData from '../../data/proposals.json'
 
 interface FourByteResponse {
   count: number;
@@ -300,11 +300,25 @@ const getChainName = (chainID: number): string => {
   return chains[chainID] || `Chain ${chainID}`
 }
 
-const PROPOSAL_OPTIONS = proposals.map((p) => ({
+const GOVERNOR_ADDRESS = '0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9'
+const GOVERNOR_ABI = [
+  'event ProposalCreated(uint256 proposalId, address proposer, address[] targets, uint256[] values, string[] signatures, bytes[] calldatas, uint256 startBlock, uint256 endBlock, string description)',
+]
+const ARB_RPC = 'https://arb1.arbitrum.io/rpc'
+
+interface ProposalOption {
+  id: string
+  label: string
+  calldata: string
+}
+
+const STATIC_PROPOSALS: ProposalOption[] = proposalsData.map((p) => ({
   id: p.proposalId,
   label: p.description.slice(0, 50).replace(/\n/g, ' '),
   calldata: p.calldatas[0],
 })).reverse()
+
+const LATEST_SAVED_BLOCK = Math.max(...proposalsData.map((p) => p.blockNumber))
 
 
 function ActionCard({ action, index }: { action: Action; index: number }) {
@@ -410,6 +424,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [showProposalDropdown, setShowProposalDropdown] = useState(false)
+  const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>(STATIC_PROPOSALS)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Load data from URL parameter on mount
@@ -419,6 +434,43 @@ function App() {
     if (dataParam) {
       setInputData(dataParam)
     }
+  }, [])
+
+  // Check for new proposals on mount
+  useEffect(() => {
+    async function fetchNewProposals() {
+      try {
+        const provider = new JsonRpcProvider(ARB_RPC)
+        const governor = new Contract(GOVERNOR_ADDRESS, GOVERNOR_ABI, provider)
+        const latestBlock = await provider.getBlockNumber()
+        const fromBlock = LATEST_SAVED_BLOCK + 1
+
+        if (fromBlock > latestBlock) return
+
+        console.log(`[Proposals] Checking for new proposals from block ${fromBlock} to ${latestBlock}`)
+        const events = await governor.queryFilter('ProposalCreated', fromBlock, latestBlock)
+
+        if (events.length === 0) return console.log("No new proposals found");
+        
+        console.log(`[Proposals] Found ${events.length} new proposal(s)`)
+
+        const newOptions: ProposalOption[] = events.map((event) => {
+          const e = event as any
+          const [proposalId, , , , , calldatas, , , description] = e.args
+          return {
+            id: proposalId.toString(),
+            label: description.slice(0, 50).replace(/\n/g, ' '),
+            calldata: calldatas[0],
+          }
+        }).reverse()
+
+        setProposalOptions((prev) => [...newOptions, ...prev])
+      } catch (err) {
+        console.error('[Proposals] Failed to fetch new proposals:', err)
+      }
+    }
+
+    fetchNewProposals()
   }, [])
 
   // Close dropdown on outside click
@@ -461,9 +513,12 @@ function App() {
       // Check if input is a proposal ID (all digits, ~77 chars)
       let dataToDecode = trimmed
       if (/^\d{70,80}$/.test(trimmed)) {
-        const match = proposals.find((p) => p.proposalId === trimmed)
-        if (match) {
-          dataToDecode = match.calldatas[0]
+        const staticMatch = proposalsData.find((p) => p.proposalId === trimmed)
+        const liveMatch = proposalOptions.find((p) => p.id === trimmed)
+        if (staticMatch) {
+          dataToDecode = staticMatch.calldatas[0]
+        } else if (liveMatch) {
+          dataToDecode = liveMatch.calldata
         } else {
           setError(`Proposal ID not found: ${trimmed}`)
           return
@@ -529,7 +584,7 @@ function App() {
                 </button>
                 {showProposalDropdown && (
                   <div className="absolute right-0 mt-1 w-96 max-h-64 overflow-auto bg-gray-950 border border-fuchsia-500 rounded shadow-[0_0_15px_rgba(217,70,239,0.3)] z-10">
-                    {PROPOSAL_OPTIONS.map((p) => (
+                    {proposalOptions.map((p) => (
                       <button
                         key={p.id}
                         onClick={() => {
