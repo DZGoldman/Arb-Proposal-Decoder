@@ -318,7 +318,10 @@ const STATIC_PROPOSALS: ProposalOption[] = proposalsData.map((p) => ({
   calldata: p.calldatas[0],
 })).reverse()
 
-const LATEST_SAVED_BLOCK = Math.max(...proposalsData.map((p) => p.blockNumber))
+const LATEST_SAVED_BLOCK = Math.max(
+  ...proposalsData.map((p) => p.blockNumber),
+  Number(import.meta.env.VITE_LATEST_BLOCK_CHECK || 0),
+)
 
 
 function ActionCard({ action, index }: { action: Action; index: number }) {
