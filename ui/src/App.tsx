@@ -60,28 +60,28 @@ class RateLimiter {
 
 const fourByteRateLimiter = new RateLimiter()
 
-function getExplorerApiUrl(chainID: number): string | null {
-  // Etherscan V2 is unified across all chains
-  const supportedChains = [1, 42161, 42161] // Ethereum, Arbitrum One
-  if (supportedChains.includes(chainID)) {
-    return 'https://api.etherscan.io/v2/api'
+function getExplorerApiUrl(chainID: number): { url: string, params: string } | null {
+  if (chainID === 1 || chainID === 42161) {
+    return { url: 'https://api.etherscan.io/v2/api', params: `chainid=${chainID}&apikey=${ETHERSCAN_API_KEY}` }
   }
-  // Nova (42170) not supported
+  if (chainID === 42170) {
+    return { url: 'https://arbitrum-nova.blockscout.com/api', params: '' }
+  }
   return null
 }
 
 async function fetchContractABI(address: string, chainID: number): Promise<string | null> {
-  const apiUrl = getExplorerApiUrl(chainID)
-  console.log('[ABI] Attempting to fetch ABI for:', { address, chainID, apiUrl })
+  const explorer = getExplorerApiUrl(chainID)
+  console.log('[ABI] Attempting to fetch ABI for:', { address, chainID, explorer })
 
-  if (!apiUrl) {
+  if (!explorer) {
     console.log('[ABI] No API URL for chain', chainID)
     return null
   }
 
   try {
-    // V2 API format: unified endpoint with chainid parameter
-    const url = `${apiUrl}?chainid=${chainID}&module=contract&action=getabi&address=${address}&apikey=${ETHERSCAN_API_KEY}`
+    const params = explorer.params ? `${explorer.params}&` : ''
+    const url = `${explorer.url}?${params}module=contract&action=getabi&address=${address}`
     console.log('[ABI] Fetching from:', url)
 
     const response = await fetch(url)
@@ -196,12 +196,13 @@ function fetchContractSource(address: string, chainID: number): Promise<{ name: 
 }
 
 async function fetchContractSourceUncached(address: string, chainID: number): Promise<{ name: string, source: string } | null> {
-  const apiUrl = getExplorerApiUrl(chainID)
-  if (!apiUrl) return null
+  const explorer = getExplorerApiUrl(chainID)
+  if (!explorer) return null
 
   try {
     const data = await fourByteRateLimiter.execute(async () => {
-      const url = `${apiUrl}?chainid=${chainID}&module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}`
+      const params = explorer.params ? `${explorer.params}&` : ''
+      const url = `${explorer.url}?${params}module=contract&action=getsourcecode&address=${address}`
       const response = await fetch(url)
       return response.json()
     })
@@ -264,11 +265,7 @@ async function decodeCallDataUncached(callData: string, address: string, chainID
     return fourByteResult
   }
 
-  // Skip Etherscan API for Nova
-  if (chainID === 42170) {
-    console.log('[Decode] Skipping Etherscan for Nova (chain 42170)')
-    return ''
-  }
+
 
   // Fallback to ABI lookup (V2 API) for L1 and Arb One only
   console.log('[Decode] 4byte failed, trying ABI lookup...')
