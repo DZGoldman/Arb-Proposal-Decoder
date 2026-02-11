@@ -434,7 +434,7 @@ function App() {
               </div>
               <div className="ml-3">
                 <h3 className="text-sm font-bold text-red-400 uppercase tracking-wide">ERROR</h3>
-                <p className="mt-1 text-sm text-red-300 font-mono">{error}</p>
+                <p className="mt-1 text-sm text-red-300 font-mono break-all">{error}</p>
               </div>
             </div>
           </div>
