@@ -183,7 +183,19 @@ async function decode4Byte(callData: string): Promise<string> {
   return ''
 }
 
-async function fetchContractSource(address: string, chainID: number): Promise<{ name: string, source: string } | null> {
+const sourceCache = new Map<string, Promise<{ name: string, source: string } | null>>()
+
+function fetchContractSource(address: string, chainID: number): Promise<{ name: string, source: string } | null> {
+  const key = `${chainID}:${address}`
+  const cached = sourceCache.get(key)
+  if (cached) return cached
+
+  const promise = fetchContractSourceUncached(address, chainID)
+  sourceCache.set(key, promise)
+  return promise
+}
+
+async function fetchContractSourceUncached(address: string, chainID: number): Promise<{ name: string, source: string } | null> {
   const apiUrl = getExplorerApiUrl(chainID)
   if (!apiUrl) return null
 
@@ -229,7 +241,19 @@ async function fetchContractSource(address: string, chainID: number): Promise<{ 
   return null
 }
 
-async function decodeCallData(callData: string, address: string, chainID: number): Promise<string> {
+const decodeCache = new Map<string, Promise<string>>()
+
+function decodeCallData(callData: string, address: string, chainID: number): Promise<string> {
+  const key = `${address}:${callData}`
+  const cached = decodeCache.get(key)
+  if (cached) return cached
+
+  const promise = decodeCallDataUncached(callData, address, chainID)
+  decodeCache.set(key, promise)
+  return promise
+}
+
+async function decodeCallDataUncached(callData: string, address: string, chainID: number): Promise<string> {
   console.log('[Decode] Starting decode for:', { callData: callData.slice(0, 20) + '...', address, chainID })
 
   // First try 4byte (works for all chains)
