@@ -1,14 +1,6 @@
 import { useState, useEffect } from 'react'
-import { decodeL1TimelockSchedule } from './decoder'
+import { decodeL1TimelockSchedule, type Action } from '../../src/index'
 import { Interface } from 'ethers'
-
-interface Action {
-  type: string;
-  address: string;
-  chainID: number;
-  callData: string;
-  decodedCallData?: string;
-}
 
 interface FourByteResponse {
   count: number;
