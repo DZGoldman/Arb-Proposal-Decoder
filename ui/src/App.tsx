@@ -567,6 +567,18 @@ function App() {
               <circle cx="12" cy="7" r="4"/>
             </svg>
           </a>
+          <div className="group relative text-green-400 hover:text-cyan-400 transition-colors cursor-pointer">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div className="absolute bottom-full left-0 pb-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"><div className="px-3 py-2 text-xs bg-gray-900 border border-green-500 rounded whitespace-nowrap flex flex-col gap-1">
+              <span className="text-green-400 font-bold mb-1">More Info</span>
+              <a href="https://www.tally.xyz/gov/arbitrum" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300">Tally</a>
+              <a href="https://docs.arbitrum.foundation/concepts/lifecycle-anatomy-aip-proposal" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300">Foundation Docs</a>
+            </div></div>
+          </div>
         </footer>
       </div>
     </div>
