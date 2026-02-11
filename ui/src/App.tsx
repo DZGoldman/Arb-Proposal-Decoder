@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { decodeL1TimelockSchedule, type Action } from '../../src/index'
+import { decode, type Action } from '../../src/index'
 import { Interface } from 'ethers'
 
 interface FourByteResponse {
@@ -450,7 +450,7 @@ function App() {
       }
 
       try {
-        const result = decodeL1TimelockSchedule(inputData.trim())
+        const result = decode(inputData.trim())
         setActions(result)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error occurred')

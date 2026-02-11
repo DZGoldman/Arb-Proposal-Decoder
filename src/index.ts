@@ -1,5 +1,5 @@
 import { Interface, AbiCoder } from 'ethers';
-import { l1TimelockABI, upgradeExecutorABI } from './abis';
+import { l1TimelockABI, upgradeExecutorABI, arbSysABI } from './abis';
 import { config } from './config';
 
 const abiCoder = new AbiCoder();
@@ -25,6 +25,19 @@ export interface Action {
   decodedCallData?: string;
 }
 
+export function decode(calldata: string) {
+  const iface = new Interface(arbSysABI);
+
+  const selector = calldata.slice(0, 10);
+  const fragment = iface.getFunction(selector);
+  if (fragment && fragment.name === 'sendTxToL1') {
+    const decoded = iface.decodeFunctionData(fragment, calldata);
+    return decodeL1TimelockSchedule(decoded[1]);
+  } else {
+    return decodeL1TimelockSchedule(calldata);
+  }
+}
+
 export function decodeL1TimelockSchedule(calldata: string) {
   const iface = new Interface(l1TimelockABI);
 
@@ -33,7 +46,6 @@ export function decodeL1TimelockSchedule(calldata: string) {
   if (!fragment) throw new Error('Could not find L1Timelock method');
 
   const decoded = iface.decodeFunctionData(fragment, calldata);
-  // console.log('Function:', fragment.name);
 
   switch (fragment.name) {
     case 'scheduleBatch': {
@@ -80,8 +92,7 @@ const handleScheduleCall = (l1timelockAction: L1TimelockAction) => {
       const isInboxAddress = config.chains.some(
         chain => chain.inboxAddress === l1timelockAction.target
       );
-      console.log("is inbox?",isInboxAddress );
-      
+
       if (isInboxAddress) {
         throw new Error(`L1Timelock calls directly to inbox not currently supported`);
       }
