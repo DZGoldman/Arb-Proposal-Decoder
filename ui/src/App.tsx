@@ -183,6 +183,52 @@ async function decode4Byte(callData: string): Promise<string> {
   return ''
 }
 
+async function fetchContractSource(address: string, chainID: number): Promise<{ name: string, source: string } | null> {
+  const apiUrl = getExplorerApiUrl(chainID)
+  if (!apiUrl) return null
+
+  try {
+    const data = await fourByteRateLimiter.execute(async () => {
+      const url = `${apiUrl}?chainid=${chainID}&module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}`
+      const response = await fetch(url)
+      return response.json()
+    })
+
+    if (data.status === '1' && data.result?.[0]?.SourceCode) {
+      let rawSource: string = data.result[0].SourceCode
+
+      // Etherscan wraps multi-file Solidity sources in {{...}} JSON
+      if (rawSource.startsWith('{{')) {
+        try {
+          // Strip outer braces to get valid JSON
+          const parsed = JSON.parse(rawSource.slice(1, -1))
+          const sources: Record<string, { content: string }> = parsed.sources || parsed
+
+          // Only keep non-dependency source files
+          const projectSources = Object.entries(sources)
+            .filter(([path]) => !path.startsWith('node_modules/') && !path.startsWith('@'))
+            .map(([path, { content }]) => `// --- ${path} ---\n${content}`)
+
+          rawSource = projectSources.length > 0
+            ? projectSources.join('\n\n')
+            : Object.values(sources)[0]?.content || rawSource
+        } catch {
+          // If parsing fails, use raw source as-is
+        }
+      }
+
+      return {
+        name: data.result[0].ContractName,
+        source: rawSource,
+      }
+    }
+  } catch (error) {
+    console.error('[Source] Fetch error:', error)
+  }
+
+  return null
+}
+
 async function decodeCallData(callData: string, address: string, chainID: number): Promise<string> {
   console.log('[Decode] Starting decode for:', { callData: callData.slice(0, 20) + '...', address, chainID })
 
@@ -244,6 +290,8 @@ const TEST_PROPOSAL_DATA = [
 function ActionCard({ action, index }: { action: Action; index: number }) {
   const [autoDecoded, setAutoDecoded] = useState<string>('')
   const [isDecoding, setIsDecoding] = useState(false)
+  const [contractSource, setContractSource] = useState<{ name: string, source: string } | null>(null)
+  const [showSource, setShowSource] = useState(false)
 
   useEffect(() => {
     if (!action.decodedCallData && action.callData) {
@@ -253,6 +301,9 @@ function ActionCard({ action, index }: { action: Action; index: number }) {
         setIsDecoding(false)
       })
     }
+    fetchContractSource(action.address, action.chainID).then((result) => {
+      setContractSource(result)
+    })
   }, [action.callData, action.decodedCallData, action.address, action.chainID])
 
   const displayDecoded = action.decodedCallData || autoDecoded
@@ -286,7 +337,25 @@ function ActionCard({ action, index }: { action: Action; index: number }) {
           >
             {action.address} ↗
           </a>
+          {contractSource && (
+            <span className="ml-2 text-green-300 text-xs">({contractSource.name})</span>
+          )}
         </div>
+        {contractSource && (
+          <div>
+            <button
+              onClick={() => setShowSource(!showSource)}
+              className="text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-600 bg-cyan-950 px-2 py-1 rounded hover:border-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] transition-all uppercase tracking-wide font-bold"
+            >
+              {showSource ? '▼ Hide Source' : '▶ View Source'}
+            </button>
+            {showSource && (
+              <pre className="mt-2 text-xs text-green-300 bg-gray-900 border border-green-600 rounded p-3 overflow-auto max-h-96">
+                {contractSource.source}
+              </pre>
+            )}
+          </div>
+        )}
         {displayDecoded ? (
           <div>
             <span className="font-bold text-cyan-400 uppercase">Decoded Call Data:</span>
