@@ -50,7 +50,7 @@ export function decodeL1TimelockSchedule(calldata: string) {
 
   switch (fragment.name) {
     case 'scheduleBatch': {
-      return decoded[0].map((arg: any, i: number) => {
+      return decoded[0].map((_: any, i: number) => {
         return handleScheduleCall({
           target: decoded[0][i],
           payload: decoded[2][i],
@@ -102,7 +102,7 @@ const handleScheduleCall = (l1timelockAction: L1TimelockAction) => {
   }
 };
 
-const handleUpradeExecutorCall = (target: string, payload: string, chainID: number): Action => {
+const handleUpradeExecutorCall = (_target: string, payload: string, chainID: number): Action => {
   const iface = new Interface(upgradeExecutorABI);
 
   const selector = payload.slice(0, 10);
