@@ -607,23 +607,34 @@ function App() {
 
       const trimmed = inputData.trim()
 
+      const isEmptyCalldata = (cd: string) => !cd || cd === '0x' || cd === '0x00'
+      const NOOP_ACTIONS: Action[] = [{ type: 'CALL' as const, address: '', chainID: 0, callData: '', decodedCallData: 'No-op (empty calldata)' }]
+
       // Check if input is a proposal ID (all digits, ~77 chars)
       if (/^\d{70,80}$/.test(trimmed)) {
         // Check core governor
         const staticMatch = proposalsData.find((p) => p.proposalId === trimmed)
         const liveMatch = proposalOptions.find((p) => p.id === trimmed)
         if (staticMatch) {
-          try {
-            setActions(decode(staticMatch.calldatas[0]))
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unknown error occurred')
+          if (isEmptyCalldata(staticMatch.calldatas[0])) {
+            setActions(NOOP_ACTIONS)
+          } else {
+            try {
+              setActions(decode(staticMatch.calldatas[0]))
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Unknown error occurred')
+            }
           }
           return
         } else if (liveMatch) {
-          try {
-            setActions(decode(liveMatch.calldata))
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unknown error occurred')
+          if (isEmptyCalldata(liveMatch.calldata)) {
+            setActions(NOOP_ACTIONS)
+          } else {
+            try {
+              setActions(decode(liveMatch.calldata))
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Unknown error occurred')
+            }
           }
           return
         }
@@ -644,11 +655,15 @@ function App() {
       }
 
       // Raw calldata — try core governor decode
-      try {
-        const result = decode(trimmed)
-        setActions(result)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error occurred')
+      if (isEmptyCalldata(trimmed)) {
+        setActions(NOOP_ACTIONS)
+      } else {
+        try {
+          const result = decode(trimmed)
+          setActions(result)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Unknown error occurred')
+        }
       }
     }, 300)
 
