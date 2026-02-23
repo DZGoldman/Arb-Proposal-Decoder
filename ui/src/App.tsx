@@ -395,6 +395,23 @@ function ActionCard({ action, index }: { action: Action; index: number }) {
 
   const displayDecoded = action.decodedCallData || autoDecoded
   const explanation = getExplanation(action)
+  const isNoop = !action.address && !action.callData
+
+  if (isNoop) {
+    return (
+      <div className="border-2 border-green-500 bg-gray-950 rounded-lg p-4 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-bold text-green-400">ACTION #{index + 1}</h3>
+        </div>
+        <div className="text-sm">
+          <span className="font-bold text-cyan-400 uppercase">Decoded Call Data:</span>
+          <code className="ml-2 text-cyan-300 bg-cyan-950 px-2 py-1 rounded border border-cyan-600 text-xs break-all block mt-1">
+            {displayDecoded}
+          </code>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="border-2 border-green-500 bg-gray-950 rounded-lg p-4 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all">
