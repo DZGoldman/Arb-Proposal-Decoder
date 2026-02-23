@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { decode, type Action } from '../../src/index'
-import { Interface, Contract, JsonRpcProvider } from 'ethers'
+import { decode, decodeTreasury, type Action } from '../../src/index'
+import { Interface, Contract, JsonRpcProvider, formatEther } from 'ethers'
 import proposalsData from '../../data/proposals.json'
+import treasuryProposalsData from '../../data/treasury-proposals.json'
 
 interface FourByteResponse {
   count: number;
@@ -300,7 +301,8 @@ const getChainName = (chainID: number): string => {
   return chains[chainID] || `Chain ${chainID}`
 }
 
-const GOVERNOR_ADDRESS = '0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9'
+const CORE_GOVERNOR_ADDRESS = '0xf07DeD9dC292157749B6Fd268E37DF6EA38395B9'
+const TREASURY_GOVERNOR_ADDRESS = '0x789fC99093B09aD01C34DC7251D0C89ce743e5a4'
 const GOVERNOR_ABI = [
   'event ProposalCreated(uint256 proposalId, address proposer, address[] targets, uint256[] values, string[] signatures, bytes[] calldatas, uint256 startBlock, uint256 endBlock, string description)',
 ]
@@ -312,14 +314,31 @@ interface ProposalOption {
   calldata: string
 }
 
+interface TreasuryProposalOption {
+  id: string
+  label: string
+  targets: string[]
+  values: string[]
+  calldatas: string[]
+}
+
 const STATIC_PROPOSALS: ProposalOption[] = proposalsData.map((p) => ({
   id: p.proposalId,
   label: p.description.slice(0, 50).replace(/\n/g, ' '),
   calldata: p.calldatas[0],
 })).reverse()
 
+const STATIC_TREASURY_PROPOSALS: TreasuryProposalOption[] = treasuryProposalsData.map((p) => ({
+  id: p.proposalId,
+  label: p.description.slice(0, 50).replace(/\n/g, ' '),
+  targets: p.targets,
+  values: p.values,
+  calldatas: p.calldatas,
+})).reverse()
+
 const LATEST_SAVED_BLOCK = Math.max(
   ...proposalsData.map((p) => p.blockNumber),
+  ...treasuryProposalsData.map((p) => p.blockNumber),
   Number(import.meta.env.VITE_LATEST_BLOCK_CHECK || 0),
 )
 
@@ -362,6 +381,12 @@ function ActionCard({ action, index }: { action: Action; index: number }) {
           <span className="font-bold text-cyan-400 uppercase">Chain:</span>
           <span className="ml-2 text-green-400">{getChainName(action.chainID)} (ID: {action.chainID})</span>
         </div>
+        {action.value && (
+          <div className="flex items-baseline">
+            <span className="font-bold text-cyan-400 uppercase">Value:</span>
+            <span className="ml-2 text-yellow-400">{formatEther(action.value)} ETH</span>
+          </div>
+        )}
         <div>
           <span className="font-bold text-cyan-400 uppercase">
             {action.type === 'DELEGATECALL' ? 'Action Contract:' : 'Target:'}
@@ -427,8 +452,11 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [showProposalDropdown, setShowProposalDropdown] = useState(false)
+  const [showTreasuryDropdown, setShowTreasuryDropdown] = useState(false)
   const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>(STATIC_PROPOSALS)
+  const [treasuryOptions, setTreasuryOptions] = useState<TreasuryProposalOption[]>(STATIC_TREASURY_PROPOSALS)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const treasuryDropdownRef = useRef<HTMLDivElement>(null)
 
   // Load data from URL parameter on mount
   useEffect(() => {
@@ -444,30 +472,55 @@ function App() {
     async function fetchNewProposals() {
       try {
         const provider = new JsonRpcProvider(ARB_RPC)
-        const governor = new Contract(GOVERNOR_ADDRESS, GOVERNOR_ABI, provider)
         const latestBlock = await provider.getBlockNumber()
         const fromBlock = LATEST_SAVED_BLOCK + 1
 
         if (fromBlock > latestBlock) return
 
         console.log(`[Proposals] Checking for new proposals from block ${fromBlock} to ${latestBlock}`)
-        const events = await governor.queryFilter('ProposalCreated', fromBlock, latestBlock)
 
-        if (events.length === 0) return console.log("No new proposals found");
-        
-        console.log(`[Proposals] Found ${events.length} new proposal(s)`)
+        // Fetch from both governors in parallel
+        const coreGovernor = new Contract(CORE_GOVERNOR_ADDRESS, GOVERNOR_ABI, provider)
+        const treasuryGovernor = new Contract(TREASURY_GOVERNOR_ADDRESS, GOVERNOR_ABI, provider)
 
-        const newOptions: ProposalOption[] = events.map((event) => {
-          const e = event as any
-          const [proposalId, , , , , calldatas, , , description] = e.args
-          return {
-            id: proposalId.toString(),
-            label: description.slice(0, 50).replace(/\n/g, ' '),
-            calldata: calldatas[0],
-          }
-        }).reverse()
+        const [coreEvents, treasuryEvents] = await Promise.all([
+          coreGovernor.queryFilter('ProposalCreated', fromBlock, latestBlock),
+          treasuryGovernor.queryFilter('ProposalCreated', fromBlock, latestBlock),
+        ])
 
-        setProposalOptions((prev) => [...newOptions, ...prev])
+        if (coreEvents.length > 0) {
+          console.log(`[Proposals] Found ${coreEvents.length} new core proposal(s)`)
+          const newOptions: ProposalOption[] = coreEvents.map((event) => {
+            const e = event as any
+            const [proposalId, , , , , calldatas, , , description] = e.args
+            return {
+              id: proposalId.toString(),
+              label: description.slice(0, 50).replace(/\n/g, ' '),
+              calldata: calldatas[0],
+            }
+          }).reverse()
+          setProposalOptions((prev) => [...newOptions, ...prev])
+        }
+
+        if (treasuryEvents.length > 0) {
+          console.log(`[Proposals] Found ${treasuryEvents.length} new treasury proposal(s)`)
+          const newTreasuryOptions: TreasuryProposalOption[] = treasuryEvents.map((event) => {
+            const e = event as any
+            const [proposalId, , targets, values, , calldatas, , , description] = e.args
+            return {
+              id: proposalId.toString(),
+              label: description.slice(0, 50).replace(/\n/g, ' '),
+              targets: [...targets],
+              values: values.map((v: bigint) => v.toString()),
+              calldatas: [...calldatas],
+            }
+          }).reverse()
+          setTreasuryOptions((prev) => [...newTreasuryOptions, ...prev])
+        }
+
+        if (coreEvents.length === 0 && treasuryEvents.length === 0) {
+          console.log("No new proposals found")
+        }
       } catch (err) {
         console.error('[Proposals] Failed to fetch new proposals:', err)
       }
@@ -476,11 +529,14 @@ function App() {
     fetchNewProposals()
   }, [])
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowProposalDropdown(false)
+      }
+      if (treasuryDropdownRef.current && !treasuryDropdownRef.current.contains(e.target as Node)) {
+        setShowTreasuryDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -514,22 +570,44 @@ function App() {
       const trimmed = inputData.trim()
 
       // Check if input is a proposal ID (all digits, ~77 chars)
-      let dataToDecode = trimmed
       if (/^\d{70,80}$/.test(trimmed)) {
+        // Check core governor
         const staticMatch = proposalsData.find((p) => p.proposalId === trimmed)
         const liveMatch = proposalOptions.find((p) => p.id === trimmed)
         if (staticMatch) {
-          dataToDecode = staticMatch.calldatas[0]
+          try {
+            setActions(decode(staticMatch.calldatas[0]))
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unknown error occurred')
+          }
+          return
         } else if (liveMatch) {
-          dataToDecode = liveMatch.calldata
-        } else {
-          setError(`Proposal ID not found: ${trimmed}`)
+          try {
+            setActions(decode(liveMatch.calldata))
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unknown error occurred')
+          }
           return
         }
+
+        // Check treasury governor
+        const treasuryStaticMatch = treasuryProposalsData.find((p) => p.proposalId === trimmed)
+        const treasuryLiveMatch = treasuryOptions.find((p) => p.id === trimmed)
+        if (treasuryStaticMatch) {
+          setActions(decodeTreasury(treasuryStaticMatch.targets, treasuryStaticMatch.values, treasuryStaticMatch.calldatas))
+          return
+        } else if (treasuryLiveMatch) {
+          setActions(decodeTreasury(treasuryLiveMatch.targets, treasuryLiveMatch.values, treasuryLiveMatch.calldatas))
+          return
+        }
+
+        setError(`Proposal ID not found: ${trimmed}`)
+        return
       }
 
+      // Raw calldata — try core governor decode
       try {
-        const result = decode(dataToDecode)
+        const result = decode(trimmed)
         setActions(result)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error occurred')
@@ -550,7 +628,7 @@ function App() {
               className="w-16 h-16 spin-3d"
             />
             <h1 className="text-4xl font-bold text-cyan-400 tracking-wider animate-pulse">
-              CONSTITUTIONAL PROPOSAL DECODER
+              PROPOSAL DECODER
             </h1>
             <img
               src="https://cryptologos.cc/logos/arbitrum-arb-logo.png"
@@ -580,10 +658,10 @@ function App() {
               </button>
               <div ref={dropdownRef} className="relative">
                 <button
-                  onClick={() => setShowProposalDropdown(!showProposalDropdown)}
+                  onClick={() => { setShowProposalDropdown(!showProposalDropdown); setShowTreasuryDropdown(false) }}
                   className="px-3 py-1 text-xs bg-fuchsia-950 border border-fuchsia-500 text-fuchsia-400 rounded hover:bg-fuchsia-900 hover:shadow-[0_0_10px_rgba(217,70,239,0.3)] transition-all uppercase tracking-wide font-bold"
                 >
-                  Select Proposal {showProposalDropdown ? '▲' : '▼'}
+                  Core {showProposalDropdown ? '▲' : '▼'}
                 </button>
                 {showProposalDropdown && (
                   <div className="absolute right-0 mt-1 w-96 max-h-64 overflow-auto bg-gray-950 border border-fuchsia-500 rounded shadow-[0_0_15px_rgba(217,70,239,0.3)] z-10">
@@ -598,6 +676,33 @@ function App() {
                       >
                         <div className="truncate">{p.label}</div>
                         <div className="text-fuchsia-600 truncate text-[10px]">ID: {p.id.slice(0, 20)}...</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div ref={treasuryDropdownRef} className="relative">
+                <button
+                  onClick={() => { setShowTreasuryDropdown(!showTreasuryDropdown); setShowProposalDropdown(false) }}
+                  className="px-3 py-1 text-xs bg-amber-950 border border-amber-500 text-amber-400 rounded hover:bg-amber-900 hover:shadow-[0_0_10px_rgba(245,158,11,0.3)] transition-all uppercase tracking-wide font-bold"
+                >
+                  Treasury {showTreasuryDropdown ? '▲' : '▼'}
+                </button>
+                {showTreasuryDropdown && (
+                  <div className="absolute right-0 mt-1 w-96 max-h-64 overflow-auto bg-gray-950 border border-amber-500 rounded shadow-[0_0_15px_rgba(245,158,11,0.3)] z-10">
+                    {treasuryOptions.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setActions(decodeTreasury(p.targets, p.values, p.calldatas))
+                          setError(null)
+                          setInputData('')
+                          setShowTreasuryDropdown(false)
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs text-amber-300 hover:bg-amber-950 hover:text-amber-200 border-b border-amber-900 last:border-b-0 transition-colors"
+                      >
+                        <div className="truncate">{p.label}</div>
+                        <div className="text-amber-600 truncate text-[10px]">ID: {p.id.slice(0, 20)}...</div>
                       </button>
                     ))}
                   </div>

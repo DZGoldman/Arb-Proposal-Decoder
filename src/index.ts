@@ -24,6 +24,7 @@ export interface Action {
   chainID: number;
   callData: string;
   decodedCallData?: string;
+  value?: string; // ETH value in wei, if non-zero
 }
 
 export function decode(calldata: string) {
@@ -101,6 +102,17 @@ const handleScheduleCall = (l1timelockAction: L1TimelockAction) => {
       throw new Error(`Unrecognized L1timelock target ${l1timelockAction.target}`);
   }
 };
+
+export function decodeTreasury(targets: string[], values: string[], calldatas: string[]): Action[] {
+  return targets.map((target, i) => ({
+    type: ActionType.CALL,
+    address: target,
+    chainID: 42161,
+    callData: calldatas[i],
+    decodedCallData: '',
+    value: values[i] !== '0' ? values[i] : undefined,
+  }));
+}
 
 const handleUpradeExecutorCall = (_target: string, payload: string, chainID: number): Action => {
   const iface = new Interface(upgradeExecutorABI);
