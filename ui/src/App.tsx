@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { decode, decodeTreasury, type Action } from '../../src/index'
-import { Interface, Contract, JsonRpcProvider, formatEther } from 'ethers'
+import { Interface, AbiCoder, Contract, JsonRpcProvider, formatEther, formatUnits } from 'ethers'
 import proposalsData from '../../data/proposals.json'
 import treasuryProposalsData from '../../data/treasury-proposals.json'
 
@@ -343,6 +343,37 @@ const LATEST_SAVED_BLOCK = Math.max(
 )
 
 
+const TREASURY_CONTRACT = '0xF3FC178157fb3c87548bAA86F9d24BA38E649B58'.toLowerCase()
+const ARB_TOKEN = '0x912CE59144191C1204E64559FE8253a0e49E6548'.toLowerCase()
+const TRANSFER_SELECTOR = '0xbeabacc8' // transfer(address,address,uint256)
+
+function getExplanation(action: Action): string | null {
+  // Simple ETH transfer: non-zero value and empty calldata
+  if (action.value && (!action.callData || action.callData === '0x')) {
+    return `Transfer ${formatEther(action.value)} ETH to ${action.address}`
+  }
+
+  // ARB transfer via treasury contract
+  if (
+    action.address.toLowerCase() === TREASURY_CONTRACT &&
+    action.callData?.slice(0, 10) === TRANSFER_SELECTOR
+  ) {
+    try {
+      const abiCoder = new AbiCoder()
+      const decoded = abiCoder.decode(
+        ['address', 'address', 'uint256'],
+        '0x' + action.callData.slice(10)
+      )
+      const [token, recipient, amount] = decoded
+      if (token.toLowerCase() === ARB_TOKEN) {
+        return `Transfer ${formatUnits(amount, 18)} ARB to ${recipient}`
+      }
+    } catch {}
+  }
+
+  return null
+}
+
 function ActionCard({ action, index }: { action: Action; index: number }) {
   const [autoDecoded, setAutoDecoded] = useState<string>('')
   const [isDecoding, setIsDecoding] = useState(false)
@@ -363,6 +394,7 @@ function ActionCard({ action, index }: { action: Action; index: number }) {
   }, [action.callData, action.decodedCallData, action.address, action.chainID])
 
   const displayDecoded = action.decodedCallData || autoDecoded
+  const explanation = getExplanation(action)
 
   return (
     <div className="border-2 border-green-500 bg-gray-950 rounded-lg p-4 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all">
@@ -439,6 +471,12 @@ function ActionCard({ action, index }: { action: Action; index: number }) {
             <code className="ml-2 block mt-1 text-green-300 bg-gray-900 px-2 py-1 rounded border border-green-600 text-xs break-all">
               {action.callData}
             </code>
+          </div>
+        )}
+        {explanation && (
+          <div className="bg-amber-950 border border-amber-500 rounded p-3 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+            <span className="font-bold text-amber-400 uppercase text-xs">Explanation:</span>
+            <p className="text-amber-200 mt-1">{explanation}</p>
           </div>
         )}
       </div>
