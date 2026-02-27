@@ -510,6 +510,7 @@ function App() {
   const [showTreasuryDropdown, setShowTreasuryDropdown] = useState(false)
   const [proposalOptions, setProposalOptions] = useState<ProposalOption[]>(STATIC_PROPOSALS)
   const [treasuryOptions, setTreasuryOptions] = useState<TreasuryProposalOption[]>(STATIC_TREASURY_PROPOSALS)
+  const [isFetchingProposals, setIsFetchingProposals] = useState(true)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const treasuryDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -578,6 +579,8 @@ function App() {
         }
       } catch (err) {
         console.error('[Proposals] Failed to fetch new proposals:', err)
+      } finally {
+        setIsFetchingProposals(false)
       }
     }
 
@@ -667,7 +670,11 @@ function App() {
           return
         }
 
-        setError(`Proposal ID not found: ${trimmed}`)
+        if (isFetchingProposals) {
+          setError('Fetching...')
+        } else {
+          setError(`Proposal ID not found: ${trimmed}`)
+        }
         return
       }
 
@@ -685,7 +692,7 @@ function App() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [inputData, proposalOptions, treasuryOptions])
+  }, [inputData, proposalOptions, treasuryOptions, isFetchingProposals])
 
   return (
     <div className="min-h-screen bg-black py-8 px-4 font-mono">
@@ -789,7 +796,19 @@ function App() {
           />
         </div>
 
-        {error && (
+        {error && error === 'Fetching...' && (
+          <div className="bg-yellow-950 border-2 border-yellow-500 rounded-lg p-4 mb-6 shadow-[0_0_15px_rgba(234,179,8,0.3)]">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <div className="text-yellow-400 text-xl">⏳</div>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-300 font-mono">Fetching...</p>
+              </div>
+            </div>
+          </div>
+        )}
+        {error && error !== 'Fetching...' && (
           <div className="bg-red-950 border-2 border-red-500 rounded-lg p-4 mb-6 shadow-[0_0_15px_rgba(239,68,68,0.3)]">
             <div className="flex items-start">
               <div className="flex-shrink-0">
