@@ -685,7 +685,7 @@ function App() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [inputData])
+  }, [inputData, proposalOptions, treasuryOptions])
 
   return (
     <div className="min-h-screen bg-black py-8 px-4 font-mono">
