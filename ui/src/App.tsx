@@ -700,7 +700,7 @@ function App() {
         <div className="mb-8 text-center">
           <div className="flex items-center justify-center gap-4 mb-2">
             <img
-              src="https://cryptologos.cc/logos/arbitrum-arb-logo.png"
+              src="/arb-logo.png"
               alt="Arbitrum Logo"
               className="w-16 h-16 spin-3d"
             />
@@ -708,7 +708,7 @@ function App() {
               PROPOSAL DECODER
             </h1>
             <img
-              src="https://cryptologos.cc/logos/arbitrum-arb-logo.png"
+              src="/arb-logo.png"
               alt="Arbitrum Logo"
               className="w-16 h-16 spin-3d"
               style={{ animationDelay: '2s' }}
