@@ -855,7 +855,7 @@ function App() {
           </div>
         </footer>
       </div>
-      <span className="fixed bottom-3 right-4 text-xs text-white select-none">by dzack23</span>
+      <a href="https://www.tally.xyz/gov/arbitrum/delegate/0xc7782d8bfbe4219a63ed8773a7b67b1a9b645cfa" target="_blank" rel="noopener noreferrer" className="fixed bottom-3 right-4 text-xs text-white hover:text-cyan-400 transition-colors">by dzack23</a>
     </div>
   )
 }
