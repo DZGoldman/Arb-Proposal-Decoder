@@ -850,10 +850,12 @@ function App() {
               <span className="text-green-400 font-bold mb-1">More Info</span>
               <a href="https://www.tally.xyz/gov/arbitrum" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300">Tally</a>
               <a href="https://docs.arbitrum.foundation/concepts/lifecycle-anatomy-aip-proposal" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300">Foundation Docs</a>
+              <a href="https://github.com/ArbitrumFoundation/governance/blob/main/docs/proposal_lifecycle_example.md" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300">Contract Docs</a>
             </div></div>
           </div>
         </footer>
       </div>
+      <span className="fixed bottom-3 right-4 text-xs text-white select-none">by dzack23</span>
     </div>
   )
 }
